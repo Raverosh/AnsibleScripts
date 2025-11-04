@@ -1,0 +1,25 @@
+---
+- name: Robocopy files locally with logging
+  hosts: windows
+  gather_facts: yes
+  vars:
+    source_path: "C:\\Users\\Administrator\\Desktop\\test2.txt"
+    destination_path: "C:\\Users\\Administrator\\Desktop\\New folder"
+    log_file: "C:\\Users\\Administrator\\Desktop\\robocopy_{{ ansible_hostname }}.log"
+  tasks:
+    - name: Ensure log directory exists
+      win_shell: |
+        $logDir = Split-Path "{{ log_file }}"
+        if (!(Test-Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force
+        }
+
+    - name: Run Robocopy with logging
+      win_shell: |
+        robocopy "{{ source_path }}" "{{ destination_path }}" /E /Z /NP /R:3 /W:5 /LOG:"{{ log_file }}"
+      register: robocopy_result
+      failed_when: robocopy_result.rc >= 8
+
+    - name: Show Robocopy summary
+      debug:
+        msg: "Robocopy completed. Log saved at {{ log_file }}"

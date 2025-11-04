@@ -1,0 +1,25 @@
+---
+- name: Robocopy a File
+  hosts: windows
+ #become: yes
+  vars:
+    src: C:\Users\Administrator\Desktop\Robocopy src
+    dest: C:\Users\Administrator\Desktop\Robocopy dest
+    Log: C:\Users\Administrator\Desktop\RobocopyLOg.txt
+  tasks:
+    - name: Ensure log directory exists
+      win_shell: |
+        $logDir = Split-Path "{{ Log }}"
+        if (!(Test-Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force
+        }
+ 
+    - name: Robocopy 
+      win_shell: >
+        robocopy "{{ src }}" "{{ dest }}" /E /Z /COPYALL /R:3 /W:5 /LOG:"{{ Log }}" 
+      register: robocopyresult
+      failed_when: robocopyresult.rc >=8
+
+    - name: Show Robocopy summary
+      debug:
+        msg: "Robocopy completed. Log saved at {{ Log }}"

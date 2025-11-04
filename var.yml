@@ -1,0 +1,44 @@
+---
+- name: Cleanup /var filesystem
+  hosts: localhost
+  become: yes
+  tasks:
+
+    - name: Display system date and uptime
+      shell: date; uptime
+      register: system_info
+    - debug:
+        var: system_info.stdout_lines
+
+    - name: Display kernel and OS info
+      shell: uname -a
+      register: kernel_info
+    - debug:
+        var: kernel_info.stdout_lines
+
+    - name: Show disk usage of /var
+      shell: df -hT /var
+      register: disk_usage
+    - debug:
+        var: disk_usage.stdout_lines
+
+    - name: List top 20 largest files/directories in /var
+      shell: find /var -xdev -ls | sort -nrk 7 | head -20
+      register: large_files
+    - debug:
+        var: large_files.stdout_lines
+
+    - name: Truncate sudo.log
+      shell: "truncate -s 0 /var/adm/sudo.log"
+      args:
+        warn: false
+
+    - name: Truncate sulog
+      shell: "truncate -s 0 /var/adm/sulog"
+      args:
+        warn: false
+
+    - name: Refresh syslogd
+      shell: "systemctl restart rsyslog"
+      ignore_errors: yes  # In case refresh is not available
+

@@ -1,0 +1,26 @@
+---
+- name: Get memory utilization from Windows servers
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Run PowerShell to get memory stats
+      win_shell: |
+        Get-CimInstance Win32_OperatingSystem | ForEach-Object {
+            $total = $_.TotalVisibleMemorySize
+            $free = $_.FreePhysicalMemory
+            $used = $total - $free
+            $usedPercent = [math]::Round(($used / $total) * 100, 2)
+            $freePercent = [math]::Round(($free / $total) * 100, 2)
+            [PSCustomObject]@{
+                TotalMemoryMB = [math]::Round($total / 1024, 2)
+                UsedMemoryMB = [math]::Round($used / 1024, 2)
+                FreeMemoryMB = [math]::Round($free / 1024, 2)
+                UsedPercent = "$usedPercent%"
+                FreePercent = "$freePercent%"
+            }
+        }
+      register: memory_output
+
+    - name: Show memory utilization
+      debug:
+        var: memory_output.stdout

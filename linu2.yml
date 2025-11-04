@@ -1,0 +1,94 @@
+---
+- name: Linux Pre-Patching Checks with Logging and Error Handling
+  hosts: localhost
+  become: yes
+  vars:
+    log_dir: /home/prepatch_logs
+    date_suffix: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+  tasks:
+
+    - name: Create log directory
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+        mode: '0755'
+      ignore_errors: yes
+
+    - name: Log system date and uptime
+      shell: date; uptime
+      register: system_uptime
+      ignore_errors: yes
+    - copy:
+        content: "{{ system_uptime.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/system_uptime_{{ date_suffix }}.log"
+      ignore_errors: yes
+
+    - name: Log current kernel version
+      shell: uname -r
+      register: kernel_version
+      ignore_errors: yes
+    - copy:
+        content: "{{ kernel_version.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/kernel_version_{{ date_suffix }}.log"
+      ignore_errors: yes
+
+    - name: Log available package updates
+      shell: yum list updates
+      register: yum_updates
+      ignore_errors: yes
+    - copy:
+        content: "{{ yum_updates.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/yum_updates_{{ date_suffix }}.log"
+      ignore_errors: yes
+
+    - name: Log latest installed kernel packages
+      shell: rpm -qa --last | grep kernel
+      register: kernel_packages
+      ignore_errors: yes
+    - copy:
+        content: "{{ kernel_packages.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/kernel_packages_{{ date_suffix }}.log"
+      ignore_errors: yes
+
+    - name: Mount all filesystems from /etc/fstab
+      shell: mount -a
+      register: mount_output
+      ignore_errors: yes
+    - copy:
+        content: "{{ mount_output.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/mount_output_{{ date_suffix }}.log"
+      ignore_errors: yes
+
+    - name: Save disk usage and filesystem info to file
+      shell: df -hTP
+      register: disk_usage
+      ignore_errors: yes
+    - copy:
+        content: "{{ disk_usage.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/df_mountpoints_{{ date_suffix }}.txt"
+      ignore_errors: yes
+    - name: Backup /etc/hosts file
+      copy:
+        src: /etc/hosts
+        dest: "{{ log_dir }}/hosts_bkp_{{ date_suffix }}"
+        remote_src: yes
+      ignore_errors: yes
+
+    - name: Save block device info to file
+      shell: lsblk
+      register: lsblk_output
+      ignore_errors: yes
+    - copy:
+        content: "{{ lsblk_output.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/lsblk_output_{{ date_suffix }}.txt"
+      ignore_errors: yes
+
+    - name: Log /etc/passwd and /etc/shadow contents
+      shell: cat /etc/passwd; cat /etc/shadow
+      register: user_info
+      ignore_errors: yes
+    - copy:
+        content: "{{ user_info.stdout | default('Command failed') }}"
+        dest: "{{ log_dir }}/user_info_{{ date_suffix }}.log"
+      ignore_errors: yes

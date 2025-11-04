@@ -1,0 +1,47 @@
+---
+- name: Linux Pre-Patching Checks
+  hosts: localhost
+  become: yes
+  tasks:
+
+    - name: Display system date and uptime
+      shell: date; uptime
+      register: system_uptime
+    - debug:
+        var: system_uptime.stdout_lines
+
+    - name: Display current kernel version
+      shell: uname -r
+      register: kernel_version
+    - debug:
+        var: kernel_version.stdout_lines
+
+    - name: List available package updates
+      shell: yum list updates
+      register: yum_updates
+    - debug:
+        var: yum_updates.stdout_lines
+
+    - name: List latest installed kernel packages
+      shell: rpm -qa --last | grep kernel
+      register: kernel_packages
+    - debug:
+        var: kernel_packages.stdout_lines
+
+    - name: Mount all filesystems from /etc/fstab
+      shell: mount -a
+
+    - name: Save disk usage and filesystem info to file
+      shell: df -hTP >> /home/df_mountpoints.txt
+
+    - name: Backup /etc/hosts file
+      shell: cp /etc/hosts /home/hosts_bkp22052022
+
+    - name: Save block device info to file
+      shell: lsblk >> /home/lsblk_output_22052022
+
+    - name: Display /etc/passwd and /etc/shadow contents
+      shell: cat /etc/passwd; cat /etc/shadow
+      register: user_info
+    - debug:
+        var: user_info.stdout_lines
