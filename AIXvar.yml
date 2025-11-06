@@ -1,0 +1,33 @@
+---
+- name: Cleanup /var filesystem on AIX
+  hosts: aix_servers
+  become: yes
+  tasks:
+ 
+    - name: Find large files in /var
+      shell: find /var -type f -size +100M
+      register: large_files
+ 
+    - name: Display large files
+      debug:
+        var: large_files.stdout_lines
+ 
+    - name: Remove old log files
+      shell: find /var/log -type f -name "*.log" -mtime +30 -exec rm -f {} \;
+ 
+    - name: Clear AIX error report logs
+      shell: /usr/bin/errclear 0
+ 
+    - name: Remove core dumps
+      shell: find /var -name "core" -exec rm -f {} \;
+ 
+    - name: Cleanup temporary files
+      shell: rm -rf /var/tmp/*
+ 
+    - name: Check disk usage after cleanup
+      shell: df -Pm /var
+      register: disk_usage
+ 
+    - name: Show disk usage
+      debug:
+        var: disk_usage.stdout
