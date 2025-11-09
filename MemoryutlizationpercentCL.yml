@@ -1,0 +1,52 @@
+---
+- name: Memory Usage Details on Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+
+    - name: Get memory utilization details with percentages
+      win_shell: |
+        $mem = Get-CimInstance Win32_OperatingSystem
+        $total = $mem.TotalVisibleMemorySize
+        $free = $mem.FreePhysicalMemory
+        $used = $total - $free
+
+        $totalGB = [math]::round($total / 1MB, 2)
+        $freeGB = [math]::round($free / 1MB, 2)
+        $usedGB = [math]::round($used / 1MB, 2)
+
+        $freePct = [math]::round(($free / $total) * 100, 2)
+        $usedPct = [math]::round(($used / $total) * 100, 2)
+
+        Write-Output "Total Memory: ${totalGB} GB"
+        Write-Output "Used Memory: ${usedGB} GB (${usedPct}%)"
+        Write-Output "Free Memory: ${freeGB} GB (${freePct}%)"
+      register: memory_info
+
+    - name: Get top 5 memory consuming processes
+      win_shell: |
+        Get-Process | Sort-Object -Property WorkingSet -Descending | Select-Object -First 5 Name, Id, @{Name='MemoryMB';Expression={[math]::round($_.WorkingSet/1MB,2)}}
+      register: top_processes
+
+
+    - name: Get top 5 largest files in C:\ (by size)
+      win_shell: |
+        Get-ChildItem -Path C:\ -Recurse -File -ErrorAction SilentlyContinue |
+        Sort-Object Length -Descending |
+        Select-Object -First 5 FullName, @{Name='SizeMB';Expression={[math]::round($_.Length/1MB,2)}}
+      register: top_files
+
+    - name: Create log file with memory details
+      win_shell: |
+        $logPath = "C:\memory_audit_log.txt"
+        "=== Memory Utilization ===" | Out-File -FilePath $logPath
+        "{{ memory_info.stdout }}" | Out-File -FilePath $logPath -Append
+        "`n=== Top 5 Memory Consuming Processes ===" | Out-File -FilePath $logPath -Append
+        "{{ top_processes.stdout }}" | Out-File -FilePath $logPath -Append
+        "`n=== Top 5 Largest Files ===" | Out-File -FilePath $logPath -Append
+        "{{ top_files.stdout }}" | Out-File -FilePath $logPath -Append
+      register: log_creation
+
+    - name: Show log creation status
+      debug:
+        var: log_creation.stdout
