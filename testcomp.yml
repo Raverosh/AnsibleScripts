@@ -1,0 +1,171 @@
+---
+- name: Linux Pre and Post Patching Checks
+  hosts: localhost
+  become: yes
+  gather_facts: no
+  vars:
+    timestamp: "{{ lookup('pipe', 'date +\"%Y-%m-%d\"') }}"
+    precheck_dir: "/tmp/precheck_patching"
+    postcheck_dir: "/tmp/postcheck_patching"
+    hosts_backup: "{{ precheck_dir }}/hosts_bkp_{{ timestamp }}"
+    precheck_log: "{{ precheck_dir }}/Precheck_{{ timestamp }}.log"
+    postcheck_log: "{{ postcheck_dir }}/Postcheck_{{ timestamp }}.log"
+  tasks:
+    - name: Create precheck directory
+      file:
+        path: "{{ precheck_dir }}"
+        state: directory
+        mode: 0755
+
+    - name: Create precheck FILE
+      file:
+        path: "{{ precheck_log }}"
+        state: touch
+        mode: 0644
+
+    - name: Record date and uptime
+      shell: "date; uptime -s"
+      register: pre_date_uptime
+    
+
+    - name: Save date and uptime output
+      copy:
+        content: "date,uptime : {{ pre_date_uptime.stdout }} \n ################################################################"
+        dest: "{{ precheck_log }}"
+
+    - name: Get current kernel version
+      shell: uname -r
+      register: pre_kernel
+
+    - name: Save kernel version
+      lineinfile:
+        line: "############################################################ \n Kernel Version : {{ pre_kernel.stdout }}"
+        path: "{{ precheck_log }}"
+        insertafter: EOF
+
+    - name: List available yum updates
+      shell: yum list update
+      register: pre_updates
+      ignore_errors: yes
+
+    - name: Save yum update
+      lineinfile:
+        line: "########################################################### \n Yum Updates : {{ pre_updates.stdout }}"
+        path: "{{ precheck_log }}"
+        insertafter: EOF
+      ignore_errors: yes 
+
+    - name: List installed kernel packages
+      shell: rpm -qa | grep kernel
+      register: pre_kernel_pkgs
+
+    - name: Save Kernel Packages
+      lineinfile:
+        line: "########################################################### \n Kernel Packages : {{ pre_kernel_pkgs.stdout }}"
+        path: "{{ precheck_log }}"
+        insertafter: EOF
+    
+    - name: Mount all filesystems
+      command: mount -a
+
+    - name: Capture df -hTP output
+      shell: df -hTP
+      register: pre_df
+
+    - name: Save df -hTP
+      lineinfile:
+        line: "########################################################## \n  Disk df  : {{ pre_df.stdout }}"
+        path: "{{ precheck_log }}"
+        insertafter: EOF
+
+    - name: Backup /etc/hosts
+      copy:
+        src: /etc/hosts
+        dest: "{{ hosts_backup }}"
+
+    - name: Capture lsblk output
+      shell: lsblk
+      register: pre_lsblk
+
+    - name: Save lsblk output
+      lineinfile:
+        line: "########################################################## \n  lsblk output  : {{ pre_lsblk.stdout }}"
+        path: "{{ precheck_log }}"
+        insertafter: EOF
+
+
+################# Post Patching #####################
+
+    - name: Create Postcheck directory
+      file:
+        path: "{{ postcheck_dir }}"
+        state: directory
+        mode: 0755
+
+    - name: Create postcheck FILE
+      file:
+        path: "{{ postcheck_log }}"
+        state: touch
+        mode: 0644
+
+    - name: Record date and uptime
+      shell: "date; uptime -s"
+      register: post_date_uptime
+    
+
+    - name: Save date and uptime output
+      copy:
+        content: "date,uptime : {{ post_date_uptime.stdout }} \n ################################################################"
+        dest: "{{ postcheck_log }}"
+
+    - name: Get current kernel version
+      shell: uname -r
+      register: post_kernel
+
+    - name: Save kernel version
+      lineinfile:
+        line: "############################################################ \n Kernel Version : {{ post_kernel.stdout }}"
+        path: "{{ postcheck_log }}"
+        insertafter: EOF
+    
+    - name: Mount all filesystems
+      command: mount -a
+
+    - name: List installed kernel packages
+      shell: rpm -qa | grep kernel
+      register: post_kernel_pkgs
+
+    - name: Save Kernel Packages
+      lineinfile:
+        line: "########################################################### \n Kernel Packages : {{ post_kernel_pkgs.stdout }}"
+        path: "{{ postcheck_log }}"
+        insertafter: EOF
+
+    - name: Mount all filesystems
+      command: mount -a
+
+    - name: Capture df -hTP output
+      shell: df -hTP
+      register: post_df
+
+    - name: Save df -hTP
+      lineinfile:
+        line: "########################################################## \n  Disk df  : {{ post_df.stdout }}"
+        path: "{{ postcheck_log }}"
+        insertafter: EOF
+    - name:  Compare hosts before and after patching
+      shell: diff {{ hosts_backup }} /etc/hosts || true
+      register: hosts_diff
+    - name: Save diff output to file
+      copy:
+       content: "{{ hosts_diff.stdout | default('') }}"
+       dest: "{{ postcheck_dir }}/hosts_diff.txt"
+    - name: Print result of comparison
+      debug:
+        msg: >-
+          {% if hosts_diff.stdout == '' %}
+             No modifications made to /etc/hosts file.
+          {% else %}
+             Differences found in /etc/hosts.
+            {{ hosts_diff.stdout }}
+          {% endif %}
