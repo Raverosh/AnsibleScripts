@@ -1,0 +1,60 @@
+#WITHOUT SNOW int
+---
+- name: RoboCopy files from source to destination
+hosts: windows_hosts
+gather_facts: no
+vars:
+   service_description: "Copy from D:\\Data to E:\\Backup"
+tasks:
+   - name: Extract source path
+     set_fact:
+       source_path: "{{ service_description | regex_search('from\\s+([^\\s]+)', '\\1') }}"
+   - name: Extract destination path
+     set_fact:
+       destination_path: "{{ service_description | regex_search('to\\s+([^\\s]+)', '\\1') }}"
+   - name: Run robocopy
+     win_shell: |
+       robocopy "{{ source_path }}" "{{ destination_path }}" /E /Z /LOG:C:\Temp\robocopy_log.txt
+     register: robocopy_result
+   - name: Show robocopy output
+     debug:
+       var: robocopy_result.stdout
+ 
+ 
+ 
+ 
+#including incident (snow integration-J)
+---
+- name: Fetch Incidents
+  hosts: localhost
+  gather_facts: no
+  collections:
+    - servicenow.itsm
+    - ansible.builtin
+  vars_files:
+    - servicenow_creds.yml
+  tasks:
+    - name: Retrieve incident by description
+      servicenow.itsm.incident_info:
+        instance:
+          host: "{{ servicenow_instance }}"
+          username: "{{ servicenow_user }}"
+          password: "{{ servicenow_password }}"
+        query:
+          - short_description: LIKE Ansible Test
+      register: result
+    - ansible.builtin.set_fact:
+        description: "{{ result.records[0].description }}"
+    - ansible.builtin.set_fact:
+        source: "{{ description.split(' ; ')[0].strip('Source: ') }}"
+        destination: "{{ description.split(' ; ')[1].strip('Destination: ') }}"
+    - name: Copying the Source to Destination
+      ansible.builtin.copy:
+        src: "{{ source }}"
+        dest: "{{ destination }}"
+    - name: Display the variables
+      ansible.builtin.debug:
+        msg:
+          - "{{ description }}"
+          - "{{ source }}"
+          - "{{ destination }}"
